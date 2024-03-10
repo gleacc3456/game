@@ -1,0 +1,447 @@
+<canvas width='1000' height="350" id='canv' style="width: 1000; height: 187.5;"></canvas>
+<br>
+<span id="health"></span><br>
+Ready: <span id="ready"></span><br>
+Percent: <span id="readyp"></span><br>
+Score: <span id="sco"></span><br>
+ForceField durability: <span id="dur"></span><br>
+<br>
+<br>
+<div id="forceF">
+  Force Field<br>
+  Cost: 2000 Score<br>
+  <button onclick="buyF()">Buy</button>
+</div>
+<div>
+</div>
+<script>
+let time = 0
+const can = document.getElementById('canv');
+const ctx = canv.getContext('2d');
+const gravityPlanet = 200
+const playerCooldown = 1000
+let ready = false
+let percent = 0
+
+
+
+
+
+const player = {
+  hp: 15,
+  score: 0,
+  maxhp: 15,
+  x: can.width / 2,
+  y: can.height / 2,
+  speed: 5,
+  forceField: {
+      equi: false,
+      size: 50,
+      durability: 8000,
+      buyed: false
+    },
+  size: 20,
+  left: true,
+  sprint: 200,
+  damage: 5,
+}
+
+
+
+
+
+
+
+
+enemyGen = (power,size) => {
+  return {
+    damage: 5 * power,
+    hp: 50 * power,
+    maxhp: 50,
+
+    x: can.width*Math.random() / 2,
+    y: can.height*Math.random() / 2,
+    speed: 5,
+    size: 20 * size,
+    left: true,
+    ready: false,
+    sight: 200 * power,
+  }
+}
+
+function buyF() {
+  if (player.score >= 2000) {
+    player.forceField = {
+      equi: false,
+      size: 50,
+      durability: 8000,
+      buyed: true,
+    }
+    player.score -= 2000
+
+    document.getElementById('forceF').innerHTML = ''
+  }
+}
+
+
+
+
+let enemies = []
+let levels = []
+let missiles = []
+let level = 0
+
+createMissile = (type,x,y,left,damage) => missiles.push({
+  damage: damage,
+  type: type,
+  speed: 1,
+  accele: 0.05,
+  x: x,
+  y: y,
+  left: left,
+})
+
+function generateLevel(mobs,power,size) {
+  let level = []
+  for (i=0;i<mobs;i++) {
+    level.push(enemyGen(power,size))
+  }
+  return level;
+}
+
+function generateBossLevel(power,size,enemyMinions=false,enemyMinionsAmount=10,enemyMinionsSize=1,enemyMinionsPower=1) {
+  if (!enemyMinions) {
+    return [enemyGen(power,size)]
+  } else {
+    const level = generateLevel(enemyMinionsAmount,enemyMinionsPower,enemyMinionsSize)
+  }
+}
+
+function addLevel(mobs,power,size=1) {
+  levels.push(generateLevel(mobs,power,size))
+}
+function addBossLevel(power,size=1) {
+  levels.push(generateBossLevel(power,size))
+}
+
+function switchLevel(num) {
+  enemies = []
+  const level = levels[num]
+
+  level.forEach((ent,i) => {
+    enemies.push(ent)
+  })
+}
+
+function updateMissiles() {
+  for(j=0;j<enemies.length;j++) {
+    for (i=0;i<missiles.length;i++) {
+      const enemy = enemies[j]
+      const obj = missiles[i]
+      const dist = Math.sqrt((player.x-obj.x)**2 + (player.y-obj.y)**2)
+      const enemDist = Math.sqrt((enemy.x-obj.x)**2 + (enemy.y-obj.y)**2)
+
+      if ((obj.type === 0) && (dist <= player.size)) {
+        player.hp -= parseInt(obj.damage)
+        missiles.splice(i,1)
+      }
+
+      if ((obj.type === 0) && (dist <= player.forceField.size) && player.forceField.equi) {
+        player.forceField.durability --
+        player.score --
+        missiles.splice(i,1)
+      }
+
+      if ((obj.type === 1) && (enemDist <= enemy.size)) {
+        enemy.hp -= obj.damage
+        obj.speed += obj.accele
+        player.score ++
+        missiles.splice(i,1)
+      }
+
+      switch(obj.left) {
+        case true:
+          obj.x += obj.speed
+          break;
+        case false:
+          obj.x -= obj.speed
+          break;
+      }
+
+      ctx.fillStyle = '#006600'
+      ctx.fillRect(obj.x,obj.y,10,10)
+    }
+  }
+}
+
+function ifEnemyDeath() {
+  enemies.forEach((enemy,i) => {
+    if (enemy.death) {
+      player.score += 100*enemy.damage/5
+      enemies[i] = {EmptyArray: true, checked: false}
+    }
+  })
+}
+let deleted = 0
+
+
+function ifAllEmpty() {
+  enemies.forEach((empty,i) => {
+    if (empty.EmptyArray && !empty.checked) {
+      deleted ++
+      empty.checked = true
+    }
+  })
+  console.log(deleted)
+  console.log(enemies.length)
+  console.log('^^^^')
+  if (deleted == enemies.length) {
+    level++
+    switchLevel(level)
+    deleted = 0;
+  }
+}
+
+function death() {
+  enemies.forEach((enemy,i) => {
+    if (player.hp <= 0) {
+      player.death = true
+    }
+    if (enemy.hp <= 0) {
+      enemy.death = true
+    }
+  })
+}
+
+function enemyAI() {
+  for (i=0;i<enemies.length;i++) {
+    const enem = enemies[i]
+    const distance = Math.sqrt((enem.x-player.x)**2+(enem.y-player.y)**2)
+
+    const left = Math.sign(player.x - enem.x) === 1
+
+    enem.left = left
+
+    if (distance <= enem.sight) {
+      if (enem.ready) {
+        createMissile(0,enem.x,enem.y,enem.left,enem.damage)
+        enem.ready = false
+      }
+
+      if (enem.left) {
+        enem.x += enem.speed / distance
+      } else {
+        enem.x -= enem.speed / distance
+      }
+    }
+  }
+}
+
+function enemyMaker(power,size) {
+  enemies.push(enemyGen(power,size))
+}
+
+drawPlayer = () => {
+if (player.forceField.equi) {
+  ctx.fillStyle = '#5555AA'
+  ctx.fillRect(player.x-player.size+5,player.y-30,player.forceField.size,player.forceField.size)
+}
+ctx.fillStyle = 'red';
+ctx.fillRect(player.x,player.y,player.size,player.size)
+if (player.left) {
+
+ctx.beginPath();
+ctx.moveTo(player.x, player.y+player.size/2); // Start point
+ctx.lineTo(player.x+40, player.y+player.size/2); // End point
+ctx.strokeStyle = 'red'; // Set line color
+ctx.lineWidth = 5; // Set line width
+ctx.stroke(); // Draw the line
+} else {
+//ctx.fillRect(player.x-5,player.y+7.5,5,5)
+
+ctx.beginPath();
+ctx.moveTo(player.x, player.y+player.size/2); // Start point
+ctx.lineTo(player.x-20, player.y+player.size/2); // End point
+ctx.strokeStyle = 'red'; // Set line color
+ctx.lineWidth = 5; // Set line width
+ctx.stroke(); // Draw the line
+}
+}
+
+function speed() {
+  window.onkeydown = function(e) {
+    switch (e.key) {
+      case "ArrowLeft":
+        player.x -= player.speed;
+        player.left = false;
+        break;
+      case "ArrowRight":
+        player.x += player.speed;
+        player.left = true;
+        break;
+      case "z":
+        if (ready) {
+          createMissile(1,player.x,player.y,player.left,player.damage)
+          ready = false
+          percent = 0
+        }
+        break;
+    }
+    if (e.code === 'Space') {
+      player.y -= player.sprint;
+    }
+    if (e.shiftKey) {
+      switch (e.key) {
+        case "ArrowLeft":
+          player.x -= player.sprint;
+          player.left = false;
+          break;
+        case "ArrowRight":
+          player.x += player.sprint;
+          player.left = true;
+          break;
+      }
+    }
+    if (e.key === 'Z') {
+      createMissile(1,player.x,player.y,player.left,player.damage)
+    }
+    if (e.key === 'h' && ready && player.forceField.buyed) {
+      if (player.score >= 1000) {
+        player.forceField.equi = true;
+      } else {
+        alert('Score must be larger than 1000')
+      }
+    } else if (e.key === 'h' && !player.forceField.buyed) {
+      alert('you havent bought this item yet')
+    }
+  };
+}
+
+function drawFloor() {
+ctx.fillStyle = 'black'
+fillLine(0,can.width-20,can.height-20,can.height-20,50)
+}
+
+function gravity() {
+  if(player.y <= can.height-23) {
+    player.y += gravityPlanet/(can.height-player.y)
+  }
+  if(player.y >= can.height-20) {
+    player.y -= 3
+  }
+
+  enemies.forEach(enemy => {
+    if(enemy.y <= can.height-3-enemy.size) {
+      enemy.y += gravityPlanet/(can.height-enemy.y)
+    }
+    if(enemy.y >= can.height-enemy.size) {
+      enemy.y -= 3
+    }
+  })
+} 
+
+
+function displayEnemies(){
+  enemies.forEach(enemy => {
+    ctx.fillStyle = 'black';
+      ctx.fillRect(enemy.x,enemy.y,enemy.size,enemy.size)
+      if (enemy.left) {
+
+      ctx.beginPath();
+      ctx.moveTo(enemy.x, enemy.y+enemy.size/2); // Start point
+      ctx.lineTo(enemy.x+enemy.size*2, enemy.y+enemy.size/2); // End point
+      ctx.strokeStyle = 'black'; // Set line color
+      ctx.lineWidth = enemy.size/5; // Set line width
+      ctx.stroke(); // Draw the line
+      } else {
+      //ctx.fillRect(player.x-5,player.y+7.5,5,5)
+
+      ctx.beginPath();
+      ctx.moveTo(enemy.x, enemy.y+enemy.size/2); // Start point
+      ctx.lineTo(enemy.x-enemy.size, enemy.y+enemy.size/2); // End point
+      ctx.strokeStyle = 'black'; // Set line color
+      ctx.lineWidth = enemy.size/5; // Set line width
+      ctx.stroke(); // Draw the line
+      }
+  })
+}
+
+
+addLevel(5,1)
+addLevel(10,2,2)
+addLevel(25,4,2)
+addLevel(30,10,3)
+addBossLevel(20,5)
+switchLevel(0)
+
+
+function update() {
+ctx.fillStyle = 'white'
+ctx.fillRect(0,0,can.width,can.height)
+
+player.health *= 2^level-1
+
+speed()
+
+ifEnemyDeath()
+
+if (!ready) {
+  percent = (time%5000)/50;
+}
+
+ifAllEmpty()
+
+updateMissiles()
+
+gravity()
+
+enemyAI()
+
+document.getElementById('health').innerHTML = `${player.hp}/${player.maxhp}`;
+document.getElementById('ready').innerHTML =  ready;
+document.getElementById('readyp').innerHTML =  `${percent}%`;
+document.getElementById('sco').innerHTML =  `${player.score}`;
+document.getElementById('dur').innerHTML =  `${player.forceField.durability}/8000`;
+
+displayEnemies()
+
+death()
+
+if (((time % 5000) <= 100)) {
+ready = true;
+percent = 100
+
+enemies.forEach(enemy => {
+  enemy.ready = ((time % 5000) <= 100);
+})
+}
+
+if (player.forceField.durability <= 0) {
+  player.forceField.durability = 8000
+  player.forceField.equi = false
+  ready = false
+}
+
+
+// floor
+drawPlayer()
+ctx.beginPath();
+ctx.moveTo(0, can.height); // Start point
+ctx.lineTo(can.width, can.height); // End point
+ctx.strokeStyle = 'red'; // Set line color
+ctx.lineWidth = 3; // Set line width
+ctx.stroke(); // Draw the line
+const anim = requestAnimationFrame(update)
+
+if (player.death) {
+  cancelAnimationFrame(anim)
+  switchLevel(0)
+}
+}
+
+
+setInterval(()=>{
+  time+=100
+},100)
+update()
+</script>
